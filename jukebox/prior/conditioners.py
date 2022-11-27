@@ -100,7 +100,7 @@ class RangeEmbedding(nn.Module):
         n_time = self.n_time
         if n_time != 1:
             assert pos_end is not None
-            interpolation  = (t.arange(0, n_time, dtype=t.float, device='cuda').view(1,n_time)/n_time)
+            interpolation  = (t.arange(0, n_time, dtype=t.float, device=pos_start.device).view(1,n_time)/n_time)
             position = pos_start + (pos_end - pos_start)*interpolation
         else:
             position = pos_start
