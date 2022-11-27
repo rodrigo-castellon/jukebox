@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import jukebox.utils.dist_adapter as dist
 
+device = 'cuda' if t.cuda.is_available() else 'cpu'
+
 class BottleneckBlock(nn.Module):
     def __init__(self, k_bins, emb_width, mu):
         super().__init__()
@@ -17,7 +19,7 @@ class BottleneckBlock(nn.Module):
         self.init = False
         self.k_sum = None
         self.k_elem = None
-        self.register_buffer('k', t.zeros(self.k_bins, self.emb_width).cuda())
+        self.register_buffer('k', t.zeros(self.k_bins, self.emb_width).to(device))
 
     def _tile(self, x):
         d, ew = x.shape
@@ -236,7 +238,7 @@ class NoBottleneck(nn.Module):
         return zs
 
     def forward(self, xs):
-        zero = t.zeros(()).cuda()
+        zero = t.zeros(()).to(device)
         commit_losses = [zero for _ in range(self.levels)]
         metrics = [dict(entropy=zero, usage=zero, used_curr=zero, pn=zero, dk=zero) for _ in range(self.levels)]
         return xs, xs, commit_losses, metrics
