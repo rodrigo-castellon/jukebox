@@ -63,7 +63,7 @@ class SimpleEmbedding(nn.Module):
 
     def forward(self, y):
         assert len(y.shape) == 2, f"Expected shape with 2 dims, got {y.shape}"
-        assert isinstance(y, t.cuda.LongTensor), f"Expected dtype {t.cuda.LongTensor}, got {y.dtype}"
+        # assert isinstance(y, t.cuda.LongTensor), f"Expected dtype {t.cuda.LongTensor}, got {y.dtype}"
         assert (0 <= y).all() and (y < self.bins).all(), f"Bins {self.bins}, got label {y}"
         return self.emb(y)
 
@@ -134,7 +134,7 @@ class LabelConditioner(nn.Module):
     def forward(self, y):
         assert len(y.shape) == 2, f"Expected shape with 2 dims, got {y.shape}"
         assert y.shape[-1] == 4 + self.max_bow_genre_size, f"Expected shape (N,{4 + self.max_bow_genre_size}), got {y.shape}"
-        assert isinstance(y, t.cuda.LongTensor), f"Expected dtype {t.cuda.LongTensor}, got {y.dtype}"
+        # assert isinstance(y, t.cuda.LongTensor), f"Expected dtype {t.cuda.LongTensor}, got {y.dtype}"
         N = y.shape[0]
         total_length, offset, length, artist, genre = y[:,0:1], y[:,1:2], y[:,2:3], y[:,3:4], y[:,4:]
 
