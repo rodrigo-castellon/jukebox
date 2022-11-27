@@ -14,6 +14,9 @@ from jukebox.utils.dist_utils import print_all
 from jukebox.vqvae.vqvae import calculate_strides
 import fire
 
+import wget
+import sys
+
 MODELS = {
     '5b': ("vqvae", "upsampler_level_0", "upsampler_level_1", "prior_5b"),
     '5b_lyrics': ("vqvae", "upsampler_level_0", "upsampler_level_1", "prior_5b_lyrics"),
@@ -21,19 +24,46 @@ MODELS = {
     #'your_model': ("you_vqvae_here", "your_upsampler_here", ..., "you_top_level_prior_here")
 }
 
-def load_checkpoint(path):
+def load_checkpoint(local_path):
+    # download if we don't have it locally yet first
+    if not os.path.exists(local_path):
+        remote_path = 'https://openaipublic.azureedge.net/jukebox/models/5b/' + local_path.split('/')[-1]
+
+        # create this bar_progress method which is invoked automatically from wget
+        def bar_progress(current, total, width=80):
+            progress_message = "Downloading: %d%% [%d / %d] bytes" % (current / total * 100, current, total)
+            # Don't use print() as it will print in new line every time.
+            sys.stdout.write("\r" + progress_message)
+            sys.stdout.flush()
+
+        wget.download(remote_path, local_path, bar=bar_progress)
+
+    # checkpoint = t.load(local_path, map_location=t.device('cpu'))
+    # print("Restored from {}".format(local_path))
+    return checkpoint
+
+def load_checkpoint_old(path):
     restore = path
     if restore.startswith(REMOTE_PREFIX):
         remote_path = restore
         local_path = os.path.join(os.path.expanduser("~/.cache"), remote_path[len(REMOTE_PREFIX):])
-        if dist.get_rank() % 8 == 0:
-            print("Downloading from azure")
-            if not os.path.exists(os.path.dirname(local_path)):
-                os.makedirs(os.path.dirname(local_path))
-            if not os.path.exists(local_path):
-                download(remote_path, local_path)
+        print("Downloading from azure")
+        if not os.path.exists(os.path.dirname(local_path)):
+            os.makedirs(os.path.dirname(local_path))
+        if not os.path.exists(local_path):
+            # download(remote_path, local_path)
+
+            # create this bar_progress method which is invoked automatically from wget
+            def bar_progress(current, total, width=80):
+                progress_message = "Downloading: %d%% [%d / %d] bytes" % (current / total * 100, current, total)
+                # Don't use print() as it will print in new line every time.
+                sys.stdout.write("\r" + progress_message)
+                sys.stdout.flush()
+
+            wget.download(remote_path, local_path, bar=bar_progress)
+
         restore = local_path
-    dist.barrier()
+    # dist.barrier()
     checkpoint = t.load(restore, map_location=t.device('cpu'))
     print("Restored from {}".format(restore))
     return checkpoint
@@ -58,7 +88,7 @@ def restore_model(hps, model, checkpoint_path):
         #     if checkpoint_hps.get(k, None) != hps.get(k, None):
         #         print(k, "Checkpoint:", checkpoint_hps.get(k, None), "Ours:", hps.get(k, None))
         checkpoint['model'] = {k[7:] if k[:7] == 'module.' else k: v for k, v in checkpoint['model'].items()}
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint['model'], strict=False)
         if 'step' in checkpoint: model.step = checkpoint['step']
 
 def restore_opt(opt, shd, checkpoint_path):
@@ -92,11 +122,11 @@ def make_vqvae(hps, device='cuda'):
                   **block_kwargs)
 
     vqvae = vqvae.to(device)
-    restore_model(hps, vqvae, hps.restore_vqvae)
+    # restore_model(hps, vqvae, hps.restore_vqvae)
     if hps.train and not hps.prior:
-        print_all(f"Loading vqvae in train mode")
+        print(f"Loading vqvae in train mode")
         if hps.restore_vqvae != '':
-            print_all("Reseting bottleneck emas")
+            print("Reseting bottleneck emas")
             for level, bottleneck in enumerate(vqvae.bottleneck.level_blocks):
                 num_samples = hps.sample_length
                 downsamples = calculate_strides(hps.strides_t, hps.downs_t)
@@ -104,7 +134,7 @@ def make_vqvae(hps, device='cuda'):
                 num_tokens = (num_samples // raw_to_tokens) * dist.get_world_size()
                 bottleneck.restore_k(num_tokens=num_tokens, threshold=hps.revival_threshold)
     else:
-        print_all(f"Loading vqvae in eval mode")
+        print(f"Loading vqvae in eval mode")
         vqvae.eval()
         freeze_model(vqvae)
     return vqvae
@@ -172,16 +202,16 @@ def make_prior(hps, vqvae, device='cuda'):
     prior.alignment_layer = hps.get('alignment_layer', None)
 
     if hps.fp16_params:
-        print_all("Converting to fp16 params")
+        print("Converting to fp16 params")
         from jukebox.transformer.ops import _convert_conv_weights_to_fp16
         prior.apply(_convert_conv_weights_to_fp16)
     prior = prior.to(device)
-    restore_model(hps, prior, hps.restore_prior)
+    # restore_model(hps, prior, hps.restore_prior)
     if hps.train:
-        print_all(f"Loading prior in train mode")
+        print(f"Loading prior in train mode")
         pass
     else:
-        print_all(f"Loading prior in eval mode")
+        print(f"Loading prior in eval mode")
         prior.eval()
         freeze_model(prior)
     return prior
